@@ -1,0 +1,12 @@
+/.devcontainer/codex-ws-token
+
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+*.png
+*.sdf
+*.pdf

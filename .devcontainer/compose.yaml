@@ -1,0 +1,23 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    environment:
+      # Codex app-server listens on container port 4500.
+      CODEX_APP_SERVER_PORT: "4500"
+    init: true
+    ports:
+      - "127.0.0.1:4506:4500"
+    volumes:
+      - ..:/workspace:cached
+      # Keeps the Linux venv separate from any host-side .venv.
+      - sdf-reader-venv:/workspace/.venv
+      # Persists Codex login state and the generated capability token.
+      - sdf-reader-codex-data:/home/ubuntu/.codex
+    working_dir: /workspace
+    command: start-codex-server
+
+volumes:
+  sdf-reader-venv:
+  sdf-reader-codex-data:
