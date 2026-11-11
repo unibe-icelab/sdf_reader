@@ -2,6 +2,7 @@
 import argparse
 import json
 from pathlib import Path
+
 from sdf_reader import read_sdf
 
 
@@ -25,12 +26,17 @@ def main():
                         help='Data to export (default: image only)')
     parser.add_argument('--dark-row-count', type=int,
                         help='Override the number of leading dark rows')
+    parser.add_argument('--rotate', dest='rotate', choices=(0, 90, 180, 270), default=90,
+                        help='Rotation angle of image (default: 90)')
+    parser.add_argument('--mirror_x', dest='mirror_x', action='store_false', help='mirror the image along the x axis (default: True)')
+    parser.add_argument('--mirror_y', dest='mirror_y', action='store_true', help='mirror the image along the y axis (default: False)')
     args = parser.parse_args()
     image = read_sdf(args.path, allow_truncated=args.allow_truncated)
     print(json.dumps(image.metadata(), indent=2))
     output = args.output or args.path.with_suffix('.png')
     image.save_png(output, normalize=args.normalize, data=args.data,
-                   dark_row_count=args.dark_row_count)
+                   dark_row_count=args.dark_row_count, rotate=args.rotate,
+                   mirror_x=args.mirror_x, mirror_y=args.mirror_y)
     print(f'Saved {output}')
 
 

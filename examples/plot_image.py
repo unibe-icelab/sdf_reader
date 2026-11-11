@@ -2,6 +2,7 @@
 import argparse
 import json
 from pathlib import Path
+
 from sdf_reader import read_sdf
 
 
