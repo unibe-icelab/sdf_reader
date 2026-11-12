@@ -124,10 +124,10 @@ def _filename_datetime(path):
             return None, None, None
 
         offset = (
-            tz[0]
-            + digits[:2]
-            + ":"
-            + digits[2:]
+                tz[0]
+                + digits[:2]
+                + ":"
+                + digits[2:]
         )
 
     return (
@@ -199,7 +199,6 @@ def _build_exif(header, *, source_path=None):
         exif[0x9004] = ascii_tag(timestamp)
 
         if subsec:
-
             # SubSecTimeOriginal
             exif[0x9291] = ascii_tag(subsec)
 
@@ -207,7 +206,6 @@ def _build_exif(header, *, source_path=None):
             exif[0x9292] = ascii_tag(subsec)
 
         if offset:
-
             # OffsetTime
             exif[0x9010] = ascii_tag(offset)
 
@@ -230,8 +228,8 @@ def _build_exif(header, *, source_path=None):
     denominator //= divisor
 
     if (
-        numerator <= 0xFFFFFFFF
-        and denominator <= 0xFFFFFFFF
+            numerator <= 0xFFFFFFFF
+            and denominator <= 0xFFFFFFFF
     ):
         exif[0x829A] = (
             RATIONAL,
@@ -252,9 +250,9 @@ def _build_exif(header, *, source_path=None):
         items = sorted(entries.items())
 
         table_size = (
-            2
-            + 12 * len(items)
-            + 4
+                2
+                + 12 * len(items)
+                + 4
         )
 
         payload = bytearray()
@@ -329,8 +327,8 @@ def _build_exif(header, *, source_path=None):
     )
 
     exif_start = (
-        8
-        + len(encode_ifd(ifd0, 8))
+            8
+            + len(encode_ifd(ifd0, 8))
     )
 
     ifd0[0x8769] = (
@@ -339,9 +337,9 @@ def _build_exif(header, *, source_path=None):
     )
 
     return (
-        b"II*\x00\x08\x00\x00\x00"
-        + encode_ifd(ifd0, 8)
-        + encode_ifd(exif, exif_start)
+            b"II*\x00\x08\x00\x00\x00"
+            + encode_ifd(ifd0, 8)
+            + encode_ifd(exif, exif_start)
     )
 
 
@@ -353,13 +351,13 @@ def _png_chunk(kind, payload):
     """Create a PNG chunk with CRC."""
 
     return (
-        struct.pack(">I", len(payload))
-        + kind
-        + payload
-        + struct.pack(
-            ">I",
-            zlib.crc32(kind + payload),
-        )
+            struct.pack(">I", len(payload))
+            + kind
+            + payload
+            + struct.pack(
+        ">I",
+        zlib.crc32(kind + payload),
+    )
     )
 
 
@@ -369,21 +367,21 @@ def _png_text_chunk(key, value):
     keyword = key.encode("latin-1")
 
     if (
-        not 1 <= len(keyword) <= 79
-        or b"\x00" in keyword
+            not 1 <= len(keyword) <= 79
+            or b"\x00" in keyword
     ):
         raise ValueError(
             f"Invalid PNG metadata keyword: {key!r}"
         )
 
     payload = (
-        keyword
-        + b"\x00"  # Keyword terminator
-        + b"\x00"  # Compression flag
-        + b"\x00"  # Compression method
-        + b"\x00"  # Language tag
-        + b"\x00"  # Translated keyword
-        + str(value).encode("utf-8")
+            keyword
+            + b"\x00"  # Keyword terminator
+            + b"\x00"  # Compression flag
+            + b"\x00"  # Compression method
+            + b"\x00"  # Language tag
+            + b"\x00"  # Translated keyword
+            + str(value).encode("utf-8")
     )
 
     return _png_chunk(
@@ -398,7 +396,6 @@ def _png_text_chunk(key, value):
 
 @dataclass
 class SDFImage:
-
     header: Header
     pixels: array
     envelope: bytes
@@ -421,9 +418,9 @@ class SDFImage:
         h = self.header
 
         if (
-            h.width != 1280
-            or h.binning_x_code
-            or h.binning_y_code
+                h.width != 1280
+                or h.binning_x_code
+                or h.binning_y_code
         ):
             return 0
 
@@ -465,10 +462,10 @@ class SDFImage:
     # --------------------------------------------------------
 
     def select_data(
-        self,
-        data="image",
-        *,
-        dark_row_count=None,
+            self,
+            data="image",
+            *,
+            dark_row_count=None,
     ):
 
         if data not in {
@@ -486,8 +483,8 @@ class SDFImage:
             )
 
         if (
-            not isinstance(dark_row_count, int)
-            or not 0 <= dark_row_count < self.header.height
+                not isinstance(dark_row_count, int)
+                or not 0 <= dark_row_count < self.header.height
         ):
             raise SDFError(
                 "dark_row_count must be an integer "
@@ -495,8 +492,8 @@ class SDFImage:
             )
 
         cut = (
-            dark_row_count
-            * self.header.width
+                dark_row_count
+                * self.header.width
         )
 
         if data == "both":
@@ -523,20 +520,41 @@ class SDFImage:
             self.header.height - dark_row_count,
         )
 
+    def remove_internal_darks(self, dark_row_count=None):
+        """
+        If internal darks are present, we remove them and return only the image.
+        :return:
+        """
+        image, _ = self.select_data("image", dark_row_count=dark_row_count)
+        return image
+
+    def remove_image(self, dark_row_count=None):
+        """
+        If internal darks are present, only the darks are returned and the image is stripped.
+        If no internal darks are present, the function returns None.
+        :return:
+        Optional[self]
+        """
+
+        darks, height = self.select_data("dark", dark_row_count=dark_row_count)
+        if height == 0:
+            return None
+        return darks
+
     # ========================================================
     # PNG export
     # ========================================================
 
     def save_png(
-        self,
-        path,
-        *,
-        normalize=False,
-        data="image",
-        dark_row_count=None,
-        rotate=0,
-        mirror_x=False,
-        mirror_y=False,
+            self,
+            path,
+            *,
+            normalize=False,
+            data="image",
+            dark_row_count=None,
+            rotate=0,
+            mirror_x=False,
+            mirror_y=False,
     ):
         """Save grayscale PNG with EXIF and SDF metadata.
 
@@ -587,7 +605,6 @@ class SDFImage:
         # ----------------------------------------------------
 
         if normalize:
-
             low = min(values)
             high = max(values)
 
@@ -611,7 +628,7 @@ class SDFImage:
             values = [
                 values[
                     (height - 1 - x) * width + y
-                ]
+                    ]
                 for y in range(width)
                 for x in range(height)
             ]
@@ -627,7 +644,7 @@ class SDFImage:
             values = [
                 values[
                     x * width + (width - 1 - y)
-                ]
+                    ]
                 for y in range(width)
                 for x in range(height)
             ]
@@ -639,11 +656,10 @@ class SDFImage:
         # ----------------------------------------------------
 
         if mirror_x:
-
             values = [
                 values[
                     y * width + (width - 1 - x)
-                ]
+                    ]
                 for y in range(height)
                 for x in range(width)
             ]
@@ -653,11 +669,10 @@ class SDFImage:
         # ----------------------------------------------------
 
         if mirror_y:
-
             values = [
                 values[
                     (height - 1 - y) * width + x
-                ]
+                    ]
                 for y in range(height)
                 for x in range(width)
             ]
@@ -750,8 +765,8 @@ class SDFImage:
 
             # Already present in PNG IHDR
             if key in (
-                "width",
-                "height",
+                    "width",
+                    "height",
             ):
                 continue
 
@@ -762,7 +777,6 @@ class SDFImage:
             if isinstance(value, dict):
 
                 for subkey, subvalue in value.items():
-
                     png += _png_text_chunk(
                         f"SDF_{key}_{subkey}",
                         subvalue,
@@ -794,7 +808,6 @@ class SDFImage:
         }
 
         for key, value in additional_fields.items():
-
             png += _png_text_chunk(
                 f"SDF_{key}",
                 value,
@@ -820,7 +833,6 @@ class SDFImage:
         }
 
         for key, value in export_fields.items():
-
             png += _png_text_chunk(
                 f"SDF_export_{key}",
                 value,
@@ -853,7 +865,6 @@ class SDFImage:
 # ============================================================
 
 def _header(b):
-
     if len(b) != 36:
         raise SDFError(
             "Camera header must contain 36 bytes"
@@ -917,10 +928,10 @@ def _header(b):
 # ============================================================
 
 def read_sdf(
-    path,
-    *,
-    header_offset=None,
-    allow_truncated=False,
+        path,
+        *,
+        header_offset=None,
+        allow_truncated=False,
 ):
     """Read a CASPEX SDF frame.
 
@@ -940,21 +951,20 @@ def read_sdf(
     # --------------------------------------------------------
 
     if header_offset is None:
-
         wrapped = (
-            len(b) >= 61
-            and int.from_bytes(
-                b[2:5],
-                "big",
-            ) == len(b)
-            and int.from_bytes(
-                b[5:8],
-                "big",
-            ) == len(b) - 24
-            and int.from_bytes(
-                b[25:29],
-                "little",
-            ) == len(b) - 24
+                len(b) >= 61
+                and int.from_bytes(
+            b[2:5],
+            "big",
+        ) == len(b)
+                and int.from_bytes(
+            b[5:8],
+            "big",
+        ) == len(b) - 24
+                and int.from_bytes(
+            b[25:29],
+            "little",
+        ) == len(b) - 24
         )
 
         header_offset = (
@@ -978,16 +988,15 @@ def read_sdf(
     )
 
     count = (
-        h.width
-        * h.height
+            h.width
+            * h.height
     )
 
     expected = (
-        count * h.bits_per_pixel + 7
-    ) // 8
+                       count * h.bits_per_pixel + 7
+               ) // 8
 
     if h.packet_length != 36 + expected:
-
         raise SDFError(
             f"Packet length {h.packet_length} "
             f"disagrees with dimensions/format "
@@ -1003,14 +1012,13 @@ def read_sdf(
     ]
 
     missing = (
-        expected
-        - len(payload)
+            expected
+            - len(payload)
     )
 
     if missing > 0:
 
         if not allow_truncated:
-
             raise SDFError(
                 f"Pixel payload is {missing} byte(s) "
                 "short; use allow_truncated=True "
@@ -1060,11 +1068,10 @@ def read_sdf(
 
         # Packed 12-bit pixels
         for i in range(
-            0,
-            len(payload) - 2,
-            3,
+                0,
+                len(payload) - 2,
+                3,
         ):
-
             a, c, d = payload[i:i + 3]
 
             pixels.extend(
@@ -1075,7 +1082,6 @@ def read_sdf(
             )
 
         if count % 2:
-
             pixels.append(
                 payload[-2]
                 | ((payload[-1] & 15) << 8)
