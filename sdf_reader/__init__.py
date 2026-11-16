@@ -4,12 +4,13 @@ import re
 import struct
 import warnings
 import zlib
-
 from array import array
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from math import gcd
 from pathlib import Path
+
+import numpy as np
 
 
 class SDFError(ValueError):
@@ -413,22 +414,15 @@ class SDFImage:
 
     @property
     def inferred_dark_row_count(self):
-        """Infer leading dark rows for known layouts."""
+        """Treat zero optical-black mean as twelve leading dark rows.
 
-        h = self.header
-
-        if (
-                h.width != 1280
-                or h.binning_x_code
-                or h.binning_y_code
-        ):
-            return 0
-
-        return {
-            1028: 4,
-            1036: 12,
-            1040: 12,
-        }.get(h.height, 0)
+        The field is always present. Zero is used as the unavailable-statistic
+        sentinel when KEEP_OPTICAL_BLACK is enabled (manual section 11.1.6).
+        Twelve rows follow the observed acquisition layout, rather than the
+        four reference rows described by the manual. An explicit dark_row_count
+        overrides this inference during selection.
+        """
+        return 0 if self.header.optical_black_mean else 12
 
     # --------------------------------------------------------
     # Metadata
@@ -520,26 +514,48 @@ class SDFImage:
             self.header.height - dark_row_count,
         )
 
-    def remove_internal_darks(self, dark_row_count=None):
+    def extract_image(self, dark_row_count=None):
         """
-        If internal darks are present, we remove them and return only the image.
-        :return:
-        """
-        image, _ = self.select_data("image", dark_row_count=dark_row_count)
-        return image
+        Extract the image, excluding internal dark rows.
 
-    def remove_image(self, dark_row_count=None):
+        Returns
+        -------
+        numpy.ndarray
+            Image with shape (height, width).
         """
-        If internal darks are present, only the darks are returned and the image is stripped.
-        If no internal darks are present, the function returns None.
-        :return:
-        Optional[self]
-        """
+        image, height = self.select_data(
+            "image",
+            dark_row_count=dark_row_count,
+        )
 
-        darks, height = self.select_data("dark", dark_row_count=dark_row_count)
-        if height == 0:
+        return np.asarray(image).reshape(
+            (height, self.header.width)
+        )
+
+    def extract_internal_darks(self, dark_row_count=None):
+        """
+        Extract internal dark rows.
+
+        Returns
+        -------
+        numpy.ndarray or None
+            Dark rows with shape (dark_row_count, width),
+            or None if no dark rows are present.
+        """
+        if dark_row_count is None:
+            dark_row_count = self.inferred_dark_row_count
+
+        if dark_row_count == 0:
             return None
-        return darks
+
+        darks, height = self.select_data(
+            "dark",
+            dark_row_count=dark_row_count,
+        )
+
+        return np.asarray(darks).reshape(
+            (height, self.header.width)
+        )
 
     # ========================================================
     # PNG export

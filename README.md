@@ -66,20 +66,20 @@ uv run python examples/simple_read.py input/2026-11-10T08-37-16.270423Z.sdf --da
 uv run python examples/simple_read.py input/2026-11-10T08-37-16.270423Z.sdf --data dark -o dark.png
 ```
 
-`both` preserves all rows in one PNG. For this sample, the first 12 rows are dark
-and the remaining 1024 rows are image data. This split is inferred from the sample's
-row intensities and 1036-row height. The manual (§11.1.6) documents four optional
-leading optical-black rows, but does not specify this sample's additional eight rows.
-The reader also recognizes 1028-row frames as four dark rows plus 1024 image rows.
-The supplied 1040-row acquisition also has 12 leading dark rows, leaving 1028
-rows (which may include sensor margins). Recognition requires unbinned width 1280.
-The header has no explicit dark-row count or KEEP_OPTICAL_BLACK flag; total height
-alone cannot distinguish active data, margins and optical-black lines. Metadata
-reports `inferred_dark_row_count` separately from the actual header fields.
-Other layouts default to no removal; use `--dark-row-count N` to specify the number
-of leading dark rows for your acquisition. This is a layout selection, not an
-intensity-based detector. Requesting dark-only output without identified dark rows
-raises an error. Normalization uses only the selected rows.
+`both` preserves all rows in one PNG. The header always contains an optical-black
+mean field. A nonzero mean selects zero leading dark rows; a zero mean selects
+**12 leading dark rows**, following the observed acquisition layout.
+`inferred_dark_row_count` reports this choice; `--dark-row-count N` overrides it.
+The 1040-row sample with zero mean therefore exports 12 dark rows and 1028 image
+rows. The 1036-row sample with zero mean exports 12 dark rows and 1024 image rows.
+The manual (§11.1.6) describes four optical-black reference rows and says that
+KEEP_OPTICAL_BLACK forces the header statistics to zero. The 12-row selection is
+an acquisition-specific convention, not a claim that the manual specifies twelve
+optical-black rows. The manual describes processing margins separately (§11.1.5);
+no further margin cropping is performed.
+Requesting dark-only output with a nonzero mean requires an explicit override.
+Normalization uses only the selected rows; original pixels and header dimensions
+remain unchanged.
 
 Library usage: `image.save_png('image.png', data='image', normalize=True)`;
 `data='both'` and `data='dark'` select the other outputs. `dark_row_count=N` overrides

@@ -19,6 +19,7 @@ class ReaderTests(unittest.TestCase):
         h[6] = 9
         h[7:15] = (123456).to_bytes(8, 'little')
         struct.pack_into('<IHHH', h, 15, 128000000, 123, count, 1)
+        struct.pack_into('<H', h, 25, 150)  # Statistics supplied; no reference rows.
         h[31:36] = (123456789).to_bytes(5, 'little')
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / 'test.sdf'
@@ -89,8 +90,14 @@ class ReaderTests(unittest.TestCase):
             image.save_png(p, data='image', dark_row_count=2, normalize=True)
             b = p.read_bytes()
             self.assertEqual(struct.unpack('>II', b[16:24]), (2, 2))
-            n = int.from_bytes(b[33:37], 'big')
-            raw = zlib.decompress(b[41:41 + n])
+            offset = 8
+            compressed = bytearray()
+            while offset < len(b):
+                n = int.from_bytes(b[offset:offset + 4], 'big')
+                if b[offset + 4:offset + 8] == b'IDAT':
+                    compressed.extend(b[offset + 8:offset + 8 + n])
+                offset += 12 + n
+            raw = zlib.decompress(compressed)
             self.assertEqual(raw[:3], b'\x00\x00\x00')
             self.assertEqual(raw[-2:], b'\xff\xff')
         self.assertEqual(len(image.pixels), 8)
@@ -100,23 +107,30 @@ class ReaderTests(unittest.TestCase):
         with self.assertRaises(SDFError):
             image.select_data('dark', dark_row_count=0)
 
-    def test_1040_layout(self):
+    def test_optical_black_layouts(self):
         image = self.read(2, b'\x00\x01')
-        image.header = replace(image.header, width=1280, height=1040,
-                               binning_x_code=0, binning_y_code=0)
-        image.pixels = array('I', [1]) * (1280 * 1040)
-        self.assertEqual(image.inferred_dark_row_count, 12)
-        self.assertEqual(image.select_data('dark')[1], 12)
-        self.assertEqual(image.select_data('image')[1], 1028)
-        self.assertEqual(image.select_data('both')[1], 1040)
-        image.header = replace(image.header, binning_y_code=1)
-        self.assertEqual(image.inferred_dark_row_count, 0)
+        for height in (1024, 1028, 1036, 1040):
+            for mean, expected in [(0, 12), (159, 0)]:
+                with self.subTest(height=height, mean=mean):
+                    image.header = replace(image.header, width=1280, height=height,
+                                           optical_black_mean=mean)
+                    image.pixels = array('I', [1]) * (1280 * height)
+                    self.assertEqual(image.inferred_dark_row_count, expected)
+                    self.assertEqual(image.select_data('image')[1], height - expected)
+                    self.assertEqual(image.select_data('both')[1], height)
+                    self.assertEqual(image.select_data('image', dark_row_count=0)[1], height)
+                    self.assertEqual(image.select_data('dark', dark_row_count=4)[1], 4)
+                    if expected:
+                        self.assertEqual(image.select_data('dark')[1], 12)
+                    else:
+                        with self.assertRaises(SDFError):
+                            image.select_data('dark')
 
     def test_sample(self):
-        p = Path(__file__).resolve().parents[1] / 'input/Image_0x0_0x40000000.png'
+        p = Path(__file__).resolve().parents[1] / 'input/2026-11-10T09-04-30.038751Z.sdf'
         if not p.exists():
             self.skipTest('Sample not available')
-        with self.assertRaises(SDFError):
+        with self.assertRaisesRegex(SDFError, '1 byte'):
             read_sdf(p)
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
@@ -126,6 +140,7 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(image.missing_payload_bytes, 1)
         self.assertEqual(image.select_data('image')[1], 1024)
         self.assertEqual(image.select_data('dark')[1], 12)
+        self.assertEqual(image.select_data('dark', dark_row_count=4)[1], 4)
         self.assertEqual(image.select_data('both')[1], 1036)
 
 

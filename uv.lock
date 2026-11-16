@@ -506,8 +506,12 @@ wheels = [
 
 [[package]]
 name = "sdf-reader"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
+dependencies = [
+    { name = "matplotlib" },
+    { name = "numpy" },
+]
 
 [package.optional-dependencies]
 plot = [
@@ -517,7 +521,9 @@ plot = [
 
 [package.metadata]
 requires-dist = [
+    { name = "matplotlib", specifier = ">=3.11.2" },
     { name = "matplotlib", marker = "extra == 'plot'", specifier = ">=3.8" },
+    { name = "numpy", specifier = ">=2.5.4" },
     { name = "numpy", marker = "extra == 'plot'", specifier = ">=1.26" },
 ]
 provides-extras = ["plot"]
